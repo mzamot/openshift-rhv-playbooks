@@ -62,8 +62,8 @@
   tasks:
     - name: Copy the secured vars to the bastion machine
       copy:
-        src: secure_vars.yaml
-        dest: secure_vars.yaml
+        src: secure_credentials.yaml
+        dest: secure_credentials.yaml
         decrypt: false
     - file:
         state: directory
