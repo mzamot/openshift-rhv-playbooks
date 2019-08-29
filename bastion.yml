@@ -1,0 +1,79 @@
+---
+- name: Create a bastion machine
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  roles:
+    - oVirt.image-template
+    - oVirt.vm-infra
+  no_log: false 
+
+  vars:
+    engine_url: https://RHVM HOST/ovirt-engine/api 
+    engine_user: admin@internal
+    engine_password: "{{ engine_password }}"
+    engine_cafile: /etc/pki/ovirt-engine/ca.pem
+
+    qcow_url: # RHEL 7 KVM Image URL
+    template_cluster: Default # RHVM Cluster Name
+    template_name: rhel7
+    template_memory: 4GiB
+    template_cpu: 2
+    wait_for_ip: true
+    debug_vm_create: false
+
+    vms:
+    - name: bastion
+      cluster: "{{ template_cluster }}"
+      profile:
+        cores: 2
+        template: "{{ template_name }}"
+        ssh_key: "{{ lookup('file', '/root/.ssh/id_rsa_ssh_ocp_admin.pub') }}"
+        state: running
+      cloud_init:
+        root_password: "{{ root_password }}"
+        custom_script: |
+          rh_subscription:
+            username: "{{ rhsub_user }}"
+            password: "{{ rhsub_pass }}"
+            auto-attach: true
+            disable-repo: ['*']
+            # 'rhel-7-server-rhv-4.2-manager-rpms' supports RHV 4.2 and 4.3
+            enable-repo: ['rhel-7-server-rpms', 'rhel-7-server-extras-rpms', 'rhel-7-server-ansible-2.7-rpms', 'rhel-7-server-ose-3.11-rpms', 'rhel-7-server-supplementary-rpms', 'rhel-7-server-rhv-4.2-manager-rpms']
+          packages:
+            - ansible
+            - ovirt-ansible-roles
+            - openshift-ansible
+            - python-ovirt-engine-sdk4
+            - git
+  pre_tasks:
+    - name: Create an ssh key-pair for OpenShift admin
+      user:
+        name: root
+        generate_ssh_key: yes
+        ssh_key_file: .ssh/id_rsa_ssh_ocp_admin
+
+  roles:
+    - oVirt.image-template
+    - oVirt.vm-infra
+
+- name: post installation tasks on the bastion machine
+  hosts: bastion
+  tasks:
+    - name: Copy the secured vars to the bastion machine
+      copy:
+        src: secure_vars.yaml
+        dest: secure_vars.yaml
+        decrypt: false
+    - file:
+        state: directory
+        path: /root/.ssh
+    - name: copy the OpenShift_admin keypair to the bastion machine
+      copy:
+        src: "{{ item }}"
+        dest: "{{ item }}"
+        mode: 0600
+      with_items:
+        - /root/.ssh/id_rsa_ssh_ocp_admin
+        - /root/.ssh/id_rsa_ssh_ocp_admin.pub
