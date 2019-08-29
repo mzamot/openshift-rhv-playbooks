@@ -1,0 +1,24 @@
+---
+- name: Openshift Origin On oVirt
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - vars.yaml
+
+  pre_tasks:
+    - ovirt_auth:
+        url:      "{{ engine_url }}"
+        username: "{{ engine_user }}"
+        password: "{{ engine_password }}"
+        insecure: "{{ engine_insecure }}"
+        ca_file:  "{{ engine_username | default(omit) }}"
+
+  roles:
+    - role: openshift_ovirt
+
+- import_playbook: setup_dns.yaml
+- import_playbook: /usr/share/ansible/openshift-ansible/playbooks/prerequisites.yml
+- import_playbook: /usr/share/ansible/openshift-ansible/playbooks/openshift-node/network_manager.yml
+- import_playbook: /usr/share/ansible/openshift-ansible/playbooks/deploy_cluster.yml

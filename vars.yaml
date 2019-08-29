@@ -1,0 +1,147 @@
+---
+# For more comprehensive list of arguments please see
+# openshift_ovirt role args   - https://github.com/openshift/openshift-ansible/tree/master/roles/openshift_ovirt#role-variables
+# openshift installation args - https://github.com/openshift/openshift-ansible/tree/master/inventory
+engine_url: https://RHVM HOST/ovirt-engine/api
+engine_user: admin@internal
+engine_insecure: true
+oreg_test_login: false
+engine_cafile:
+
+openshift_ovirt_vm_manifest:
+  - name: master
+    count: 3
+    profile: master_vm
+  - name: compute
+    count: 0
+    profile: node_vm
+  - name: infra
+    count: 2
+    profile: node_vm
+  - name: etcd
+    count: 0
+    profile: node_vm
+  - name: lb
+    count: 0
+    profile: node_vm
+
+openshift_ovirt_all_in_one: false
+openshift_ovirt_cluster: Default
+openshift_ovirt_data_store: data 
+openshift_ovirt_ssh_key: "{{ lookup('file', '/root/.ssh/id_rsa_ssh_ocp_admin.pub') }}"
+
+openshift_master_identity_providers: [{'name': 'htpasswd_auth', 'login': 'true', 'challenge': 'true', 'kind': 'HTPasswdPasswordIdentityProvider', 'filename': '/etc/origin/master/htpasswd'}]
+
+public_hosted_zone: zamot.io
+# Uncomment to disable install-time checks, for smaller scale installations
+openshift_disable_check: memory_availability,disk_availability,docker_image_availability,docker_storage
+
+qcow_url: # RHEL7 KVM URL Link 
+image_path: /var/tmp 
+template_name: rhel7
+template_cluster: "{{ openshift_ovirt_cluster }}"
+template_memory: 4GiB
+template_cpu: 1
+template_disk_storage: "{{ openshift_ovirt_data_store }}"
+template_disk_size: 10GiB
+template_nics:
+  - name: nic1
+    profile_name: ovirtmgmt
+    interface: virtio
+
+debug_vm_create: true
+wait_for_ip: true
+vm_infra_wait_for_ip_retries: 30
+vm_infra_wait_for_ip_delay: 20
+
+node_item: &node_item
+  cluster: "{{ openshift_ovirt_cluster }}"
+  template: "{{ template_name }}"
+  memory: "{{ vm_memory | default('8GiB') }}"
+  cores: "{{ vm_cores | default(2) }}"
+  high_availability: true
+  disks:
+    - name: docker
+      size: 15GiB
+      interface: virtio
+      storage_domain: "{{ openshift_ovirt_data_store }}"
+    - name: openshift
+      size: 30Gib 
+      interface: virtio
+      storage_domain: "{{ openshift_ovirt_data_store }}"
+  state: running
+  cloud_init:
+    root_password: "{{ root_password }}"
+    authorized_ssh_keys: "{{ openshift_ovirt_ssh_key }}"
+    custom_script: "{{ cloud_init_script_node | to_nice_yaml }}"
+
+openshift_ovirt_vm_profile:
+  master_vm:
+    <<: *node_item
+    memory: 16GiB
+    cores: 4
+    disks:
+    - name: docker
+      size: 15GiB
+      interface: virtio
+      storage_domain: "{{ openshift_ovirt_data_store }}"
+    - name: openshift_local
+      size: 30Gib 
+      interface: virtio
+      storage_domain: "{{ openshift_ovirt_data_store }}"
+    - name: etcd
+      size: 25GiB
+      interface: virtio
+      storage_domain: "{{ openshift_ovirt_data_store }}"
+    cloud_init:
+      root_password: "{{ root_password }}"
+      authorized_ssh_keys: "{{ openshift_ovirt_ssh_key }}"
+      custom_script: "{{ cloud_init_script_master | to_nice_yaml }}"
+  node_vm:
+    <<: *node_item
+  infra_vm:
+    <<: *node_item
+  etcd_vm:
+    <<: *node_item
+  lb_vm:
+    <<: *node_item
+
+# Cloud Init Scripts #
+
+cloud_init_script_node: &cloud_init_script_node
+  packages:
+    - ovirt-guest-agent
+  runcmd:
+    - sed -i 's/# ignored_nics =.*/ignored_nics = docker0 tun0 /' etc/ovirt-guest-agent.conf
+    - systemctl enable ovirt-guest-agent
+    - systemctl start ovirt-guest-agent
+    - mkdir -p /var/lib/docker
+    - mkdir -p /var/lib/origin/openshift.local.volumes 
+    - /usr/sbin/mkfs.xfs -L dockerlv /dev/vdb
+    - /usr/sbin/mkfs.xfs -L ocplv /dev/vdc
+  mounts:
+    - [ '/dev/vdb', '/var/lib/docker', 'xfs', 'defaults,gquota' ]
+    - [ '/dev/vdc', '/var/lib/origin/openshift.local.volumes', 'xfs', 'defaults,gquota' ]
+  power_state:
+    mode: reboot
+    message: cloud init finished - boot and install openshift 
+    condition: True
+
+cloud_init_script_master:
+  <<: *cloud_init_script_node
+  runcmd:
+    - sed -i 's/# ignored_nics =.*/ignored_nics = docker0 tun0/' /etc/ovirt-guest-agent.conf
+    - systemctl enable ovirt-guest-agent
+    - systemctl start ovirt-guest-agent
+    - mkdir -p /var/lib/docker
+    - mkdir -p /var/lib/origin/openshift.local.volumes 
+    - mkdir -p /var/lib/etcd
+    - /usr/sbin/mkfs.xfs -L dockerlv /dev/vdb
+    - /usr/sbin/mkfs.xfs -L ocplv /dev/vdc
+    - /usr/sbin/mkfs.xfs -L etcdlv /dev/vdd
+  mounts:
+    - [ '/dev/vdb', '/var/lib/docker', 'xfs', 'defaults,gquota' ]
+    - [ '/dev/vdc', '/var/lib/origin/openshift.local.volumes', 'xfs', 'defaults,gquota' ]
+    - [ '/dev/vdd', '/var/lib/etcd', 'xfs', 'defaults,gquota' ]
+
+...
