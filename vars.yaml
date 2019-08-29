@@ -1,7 +1,8 @@
 ---
 # For more comprehensive list of arguments please see
-# openshift_ovirt role args   - https://github.com/openshift/openshift-ansible/tree/master/roles/openshift_ovirt#role-variables
-# openshift installation args - https://github.com/openshift/openshift-ansible/tree/master/inventory
+# openshift_ovirt role args   - https://github.com/openshift/openshift-ansible/tree/release-3.11/roles/openshift_ovirt#role-variables
+# openshift installation args - https://github.com/openshift/openshift-ansible/tree/release-3.11/inventory
+
 engine_url: https://RHVM HOST/ovirt-engine/api
 engine_user: admin@internal
 engine_insecure: true
@@ -13,7 +14,7 @@ openshift_ovirt_vm_manifest:
     count: 3
     profile: master_vm
   - name: compute
-    count: 0
+    count: 2
     profile: node_vm
   - name: infra
     count: 2
@@ -22,17 +23,15 @@ openshift_ovirt_vm_manifest:
     count: 0
     profile: node_vm
   - name: lb
-    count: 0
+    count: 1
     profile: node_vm
 
 openshift_ovirt_all_in_one: false
-openshift_ovirt_cluster: Default
-openshift_ovirt_data_store: data 
+openshift_ovirt_cluster: Default # Name of the RHV Cluster
+openshift_ovirt_data_store: data # Name of the data domain
 openshift_ovirt_ssh_key: "{{ lookup('file', '/root/.ssh/id_rsa_ssh_ocp_admin.pub') }}"
 
-openshift_master_identity_providers: [{'name': 'htpasswd_auth', 'login': 'true', 'challenge': 'true', 'kind': 'HTPasswdPasswordIdentityProvider', 'filename': '/etc/origin/master/htpasswd'}]
-
-public_hosted_zone: zamot.io
+public_hosted_zone: # Domain name of the setup
 # Uncomment to disable install-time checks, for smaller scale installations
 openshift_disable_check: memory_availability,disk_availability,docker_image_availability,docker_storage
 
